@@ -2478,8 +2478,6 @@ function PrinterCard({
             {/* Temperatures */}
             {status.temperatures && viewMode === 'expanded' && (() => {
               // Use actual heater states from MQTT stream
-              const nozzleHeating = status.temperatures.nozzle_heating || status.temperatures.nozzle_2_heating || false;
-              const bedHeating = status.temperatures.bed_heating || false;
               const chamberHeating = status.temperatures.chamber_heating || false;
               const isDualNozzle = printer.nozzle_count === 2 || status.temperatures.nozzle_2 !== undefined;
               // active_extruder: 0=right, 1=left
@@ -2488,46 +2486,9 @@ function PrinterCard({
               // nozzle_rack id 0 = extruder 0 = RIGHT, id 1 = extruder 1 = LEFT
               const leftNozzleSlot = status.nozzle_rack?.find(s => s.id === 1);
               const rightNozzleSlot = status.nozzle_rack?.find(s => s.id === 0);
-              // Single-nozzle models (H2D, H2C): use the primary nozzle (id 0)
-              const singleNozzleSlot = rightNozzleSlot || leftNozzleSlot;
 
               return (
                 <div className="flex items-stretch gap-1.5 flex-wrap">
-                  {/* Nozzle temp - combined for dual nozzle */}
-                  <div className="text-center px-2 py-1.5 bg-bambu-dark rounded-lg flex-1 flex flex-col justify-center items-center">
-                    <HeaterThermometer className="w-3.5 h-3.5 mb-0.5" color="text-orange-400" isHeating={nozzleHeating} />
-                    {status.temperatures.nozzle_2 !== undefined ? (
-                      <>
-                        <p className="text-[9px] text-bambu-gray">L / R</p>
-                        <p className="text-[11px] text-white">
-                          {Math.round(status.temperatures.nozzle || 0)}° / {Math.round(status.temperatures.nozzle_2 || 0)}°
-                        </p>
-                      </>
-                    ) : singleNozzleSlot ? (
-                      <NozzleSlotHoverCard slot={singleNozzleSlot} index={0} activeStatus filamentName={singleNozzleSlot.filament_id ? filamentInfo?.[singleNozzleSlot.filament_id]?.name : undefined}>
-                        <div className="cursor-default">
-                          <p className="text-[9px] text-bambu-gray">{t('printers.temperatures.nozzle')}</p>
-                          <p className="text-[11px] text-white">
-                            {Math.round(status.temperatures.nozzle || 0)}°C
-                          </p>
-                        </div>
-                      </NozzleSlotHoverCard>
-                    ) : (
-                      <>
-                        <p className="text-[9px] text-bambu-gray">{t('printers.temperatures.nozzle')}</p>
-                        <p className="text-[11px] text-white">
-                          {Math.round(status.temperatures.nozzle || 0)}°C
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-center px-2 py-1.5 bg-bambu-dark rounded-lg flex-1 flex flex-col justify-center items-center">
-                    <HeaterThermometer className="w-3.5 h-3.5 mb-0.5" color="text-blue-400" isHeating={bedHeating} />
-                    <p className="text-[9px] text-bambu-gray">{t('printers.temperatures.bed')}</p>
-                    <p className="text-[11px] text-white">
-                      {Math.round(status.temperatures.bed || 0)}°C
-                    </p>
-                  </div>
                   {status.temperatures.chamber !== undefined && (
                     <div className="text-center px-2 py-1.5 bg-bambu-dark rounded-lg flex-1 flex flex-col justify-center items-center">
                       <HeaterThermometer className="w-3.5 h-3.5 mb-0.5" color="text-green-400" isHeating={chamberHeating} />
@@ -2574,6 +2535,9 @@ function PrinterCard({
               const isPaused = status.state === 'PAUSED' || status.state === 'PAUSE';
               const isPrinting = isRunning || isPaused;
               const isControlBusy = stopPrintMutation.isPending || pausePrintMutation.isPending || resumePrintMutation.isPending;
+              const nozzleHeating = status.temperatures?.nozzle_heating || status.temperatures?.nozzle_2_heating || false;
+              const bedHeating = status.temperatures?.bed_heating || false;
+              const isDualNozzle = status.temperatures?.nozzle_2 !== undefined;
 
               // Fan data
               const partFan = status.cooling_fan_speed;
@@ -2591,8 +2555,32 @@ function PrinterCard({
                   </div>
 
                   <div className="flex items-center justify-between gap-2 max-[550px]:items-start">
-                    {/* Left: Fan Status - always visible, dynamic coloring */}
+                    {/* Left: Temperature + Fan Status chips */}
                     <div className="flex items-center gap-2 min-w-0 max-[550px]:flex-wrap max-[550px]:items-start max-[550px]:gap-1.5">
+                      {/* Nozzle Temperature */}
+                      <div
+                        className={`flex items-center gap-1 px-1.5 py-1 rounded ${nozzleHeating ? 'bg-orange-500/20' : 'bg-orange-500/10'}`}
+                        title={isDualNozzle ? `${t('printers.temperatures.nozzle')} (L / R)` : t('printers.temperatures.nozzle')}
+                      >
+                        <HeaterThermometer className="w-3.5 h-3.5" color="text-orange-400" isHeating={nozzleHeating} />
+                        <span className="text-[10px] text-orange-400">
+                          {isDualNozzle
+                            ? `L/R ${Math.round(status.temperatures?.nozzle || 0)}°/${Math.round(status.temperatures?.nozzle_2 || 0)}°`
+                            : `${Math.round(status.temperatures?.nozzle || 0)}°C`}
+                        </span>
+                      </div>
+
+                      {/* Bed Temperature */}
+                      <div
+                        className={`flex items-center gap-1 px-1.5 py-1 rounded ${bedHeating ? 'bg-blue-500/20' : 'bg-blue-500/10'}`}
+                        title={t('printers.temperatures.bed')}
+                      >
+                        <HeaterThermometer className="w-3.5 h-3.5" color="text-blue-400" isHeating={bedHeating} />
+                        <span className="text-[10px] text-blue-400">
+                          {Math.round(status.temperatures?.bed || 0)}°C
+                        </span>
+                      </div>
+
                       {/* Part Cooling Fan */}
                       <div
                         className={`flex items-center gap-1 px-1.5 py-1 rounded ${partFan && partFan > 0 ? 'bg-cyan-500/10' : 'bg-bambu-dark'}`}
