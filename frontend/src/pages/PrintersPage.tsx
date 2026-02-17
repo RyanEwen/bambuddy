@@ -1,69 +1,69 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus,
-  Link,
-  Unlink,
-  Signal,
-  Clock,
-  MoreVertical,
-  Trash2,
-  RefreshCw,
-  Box,
-  HardDrive,
-  AlertTriangle,
+  AirVent,
   AlertCircle,
-  Terminal,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  Box,
+  CheckCircle,
+  ChevronDown,
+  Clock,
+  Download,
+  Fan,
+  HardDrive,
+  Home,
+  Layers,
+  Link,
+  Loader2,
+  MoreVertical,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
   Power,
   PowerOff,
-  Zap,
-  Wrench,
-  ChevronDown,
-  Pencil,
-  ArrowUp,
-  ArrowDown,
-  Layers,
-  Video,
-  Search,
-  Loader2,
-  Square,
-  Pause,
-  Play,
-  X,
-  Fan,
-  Wind,
-  AirVent,
-  Download,
+  RefreshCw,
   ScanSearch,
-  CheckCircle,
-  XCircle,
+  Search,
+  Signal,
+  Square,
+  Terminal,
+  Trash2,
+  Unlink,
   User,
-  Home,
+  Video,
+  Wind,
+  Wrench,
+  X,
+  XCircle,
+  Zap,
 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 import { useNavigate } from 'react-router-dom';
+import type { AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, Printer, PrinterCreate, SpoolAssignment } from '../api/client';
 import { api, discoveryApi, firmwareApi } from '../api/client';
-import { formatDateOnly, formatETA, formatDuration } from '../utils/date';
-import type { Printer, PrinterCreate, AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment } from '../api/client';
-import { Card, CardContent } from '../components/Card';
-import { Button } from '../components/Button';
-import { ConfirmModal } from '../components/ConfirmModal';
-import { FileManagerModal } from '../components/FileManagerModal';
-import { EmbeddedCameraViewer } from '../components/EmbeddedCameraViewer';
-import { MQTTDebugModal } from '../components/MQTTDebugModal';
-import { HMSErrorModal, filterKnownHMSErrors } from '../components/HMSErrorModal';
-import { PrinterQueueWidget } from '../components/PrinterQueueWidget';
 import { AMSHistoryModal } from '../components/AMSHistoryModal';
-import { FilamentHoverCard, EmptySlotHoverCard } from '../components/FilamentHoverCard';
-import { LinkSpoolModal } from '../components/LinkSpoolModal';
 import { AssignSpoolModal } from '../components/AssignSpoolModal';
+import { Button } from '../components/Button';
+import { Card, CardContent } from '../components/Card';
 import { ConfigureAmsSlotModal } from '../components/ConfigureAmsSlotModal';
-import { useToast } from '../contexts/ToastContext';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { EmbeddedCameraViewer } from '../components/EmbeddedCameraViewer';
+import { EmptySlotHoverCard, FilamentHoverCard } from '../components/FilamentHoverCard';
+import { FileManagerModal } from '../components/FileManagerModal';
+import { HMSErrorModal, filterKnownHMSErrors } from '../components/HMSErrorModal';
 import { ChamberLight } from '../components/icons/ChamberLight';
-import { SkipObjectsModal, SkipObjectsIcon } from '../components/SkipObjectsModal';
+import { LinkSpoolModal } from '../components/LinkSpoolModal';
+import { MQTTDebugModal } from '../components/MQTTDebugModal';
+import { PrinterQueueWidget } from '../components/PrinterQueueWidget';
+import { SkipObjectsIcon, SkipObjectsModal } from '../components/SkipObjectsModal';
+import { useToast } from '../contexts/ToastContext';
+import { formatDateOnly, formatDuration, formatETA } from '../utils/date';
 
 // Complete Bambu Lab filament color mapping by tray_id_name
 // Source: https://github.com/queengooborg/Bambu-Lab-RFID-Library
@@ -2705,8 +2705,8 @@ function PrinterCard({
                           <div key={ams.id} className="col-span-2 p-2.5 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary/30">
                             {/* Header: Label + Stats (no icon) */}
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-white font-medium">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[10px] text-white font-medium inline-block max-w-full truncate">
                                   {getAmsLabel(ams.id, ams.tray.length)}
                                 </span>
                                 {isDualNozzle && (isLeftNozzle || isRightNozzle) && (
@@ -3052,10 +3052,10 @@ function PrinterCard({
                           );
 
                           return (
-                            <div key={ams.id} className="col-span-1 p-2.5 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary/30">
+                            <div key={ams.id} className="col-span-1 w-1/2 justify-self-start p-2.5 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary/30">
                               {/* Row 1: Label + Nozzle */}
-                              <div className="flex items-center gap-1 mb-2">
-                                <span className="text-[10px] text-white font-medium">
+                              <div className="flex items-center gap-1 mb-2 min-w-0">
+                                <span className="text-[10px] text-white font-medium inline-block max-w-full truncate">
                                   {getAmsLabel(ams.id, ams.tray.length)}
                                 </span>
                                 {isDualNozzle && (isLeftNozzle || isRightNozzle) && (
@@ -3225,9 +3225,9 @@ function PrinterCard({
 
                         {/* External spool(s) - keep original styling, now in same grid as regular AMS */}
                         {status.vt_tray.length > 0 && (
-                          <div className="col-span-1 p-2.5 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary/30">
-                            <div className="flex items-center gap-1 mb-2">
-                              <span className="text-[10px] text-white font-medium">{t('printers.external')}</span>
+                          <div className="col-span-1 w-1/2 justify-self-start p-2.5 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary/30">
+                            <div className="flex items-center gap-1 mb-2 min-w-0">
+                              <span className="text-[10px] text-white font-medium inline-block max-w-full truncate">{t('printers.external')}</span>
                             </div>
                             <div className={`grid ${status.vt_tray.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5`}>
                               {[...status.vt_tray].sort((a, b) => (a.id ?? 254) - (b.id ?? 254)).map((extTray) => {
