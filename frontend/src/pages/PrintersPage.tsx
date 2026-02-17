@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
-import { api, discoveryApi, firmwareApi } from '../api/client';
+import { api, discoveryApi, firmwareApi, getAuthToken } from '../api/client';
 import { formatDateOnly, formatETA, formatDuration } from '../utils/date';
 import type { Printer, PrinterCreate, AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment } from '../api/client';
 import { Card, CardContent } from '../components/Card';
@@ -1141,7 +1141,67 @@ function isBambuLabSpool(tray: {
   return false;
 }
 
-function CoverImage({ url, printName }: { url: string | null; printName?: string }) {
+function LiveCameraThumbnail({ printerId }: { printerId: number }) {
+  const { t } = useTranslation();
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  const [imageKey, setImageKey] = useState(Date.now());
+
+  const streamUrl = useMemo(
+    () => `/api/v1/printers/${printerId}/camera/stream?fps=5&t=${imageKey}`,
+    [printerId, imageKey]
+  );
+
+  useEffect(() => {
+    setLoaded(false);
+    setError(false);
+    setImageKey(Date.now());
+  }, [printerId]);
+
+  useEffect(() => {
+    return () => {
+      const headers: Record<string, string> = {};
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      fetch(`/api/v1/printers/${printerId}/camera/stop`, {
+        method: 'POST',
+        keepalive: true,
+        headers,
+      }).catch(() => {});
+    };
+  }, [printerId]);
+
+  return (
+    <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-bambu-dark-tertiary flex items-center justify-center">
+      {!error ? (
+        <>
+          <img
+            src={streamUrl}
+            alt={t('camera.live')}
+            className={`w-full h-full object-cover ${loaded ? 'block' : 'hidden'}`}
+            onLoad={() => setLoaded(true)}
+            onError={() => setError(true)}
+          />
+          {!loaded && <Loader2 className="w-5 h-5 text-bambu-gray animate-spin" />}
+        </>
+      ) : (
+        <Video className="w-8 h-8 text-bambu-gray" />
+      )}
+    </div>
+  );
+}
+
+function CoverImage({
+  url,
+  printName,
+  printerId,
+  mediaMode = 'preview',
+}: {
+  url: string | null;
+  printName?: string;
+  printerId: number;
+  mediaMode?: 'preview' | 'camera';
+}) {
   const { t } = useTranslation();
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -1160,6 +1220,10 @@ function CoverImage({ url, printName }: { url: string | null; printName?: string
     setLoaded(false);
     setError(false);
   }, [cacheBustedUrl]);
+
+  if (mediaMode === 'camera') {
+    return <LiveCameraThumbnail printerId={printerId} />;
+  }
 
   return (
     <>
@@ -1405,6 +1469,7 @@ function PrinterCard({
   onUnassignSpool,
   timeFormat = 'system',
   cameraViewMode = 'window',
+  mediaMode = 'preview',
   onOpenEmbeddedCamera,
   checkPrinterFirmware = true,
 }: {
@@ -1428,6 +1493,7 @@ function PrinterCard({
   onUnassignSpool?: (printerId: number, amsId: number, trayId: number) => void;
   timeFormat?: 'system' | '12h' | '24h';
   cameraViewMode?: 'window' | 'embedded';
+  mediaMode?: 'preview' | 'camera';
   onOpenEmbeddedCamera?: (printerId: number, printerName: string) => void;
   checkPrinterFirmware?: boolean;
 }) {
@@ -2394,6 +2460,8 @@ function PrinterCard({
                   <div className="flex gap-3">
                     {/* Cover Image */}
                     <CoverImage
+                      printerId={printer.id}
+                      mediaMode={mediaMode}
                       url={status.state === 'RUNNING' ? status.cover_url : null}
                       printName={status.state === 'RUNNING' ? (status.subtask_name || status.current_print || undefined) : undefined}
                     />
@@ -4916,6 +4984,10 @@ export function PrintersPage() {
     const saved = localStorage.getItem('printerCardSize');
     return saved ? parseInt(saved, 10) : 2; // Default to medium
   });
+  const [previewMode, setPreviewMode] = useState<'preview' | 'camera'>(() => {
+    const saved = localStorage.getItem('printerPreviewMode');
+    return saved === 'camera' ? 'camera' : 'preview';
+  });
   // Derive viewMode from cardSize: S=compact, M/L/XL=expanded
   const viewMode: ViewMode = cardSize === 1 ? 'compact' : 'expanded';
   const queryClient = useQueryClient();
@@ -5223,6 +5295,22 @@ export function PrintersPage() {
             })}
           </div>
 
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setPreviewMode((prev) => {
+                const next = prev === 'preview' ? 'camera' : 'preview';
+                localStorage.setItem('printerPreviewMode', next);
+                return next;
+              });
+            }}
+            title={previewMode === 'preview' ? 'Show live camera views' : 'Show model previews'}
+          >
+            {previewMode === 'preview' ? <Video className="w-4 h-4" /> : <Box className="w-4 h-4" />}
+            {previewMode === 'preview' ? t('camera.live') : t('printers.printPreview')}
+          </Button>
+
           <div className="w-px h-6 bg-bambu-dark-tertiary" />
 
           <label className="flex items-center gap-2 text-sm text-bambu-gray cursor-pointer">
@@ -5338,6 +5426,7 @@ export function PrintersPage() {
                     onUnassignSpool={(pid, aid, tid) => unassignMutation.mutate({ printerId: pid, amsId: aid, trayId: tid })}
                     timeFormat={settings?.time_format || 'system'}
                     cameraViewMode={settings?.camera_view_mode || 'window'}
+                    mediaMode={previewMode}
                     onOpenEmbeddedCamera={(id, name) => setEmbeddedCameraPrinters(prev => new Map(prev).set(id, { id, name }))}
                     checkPrinterFirmware={settings?.check_printer_firmware !== false}
                   />
@@ -5371,6 +5460,7 @@ export function PrintersPage() {
               } : undefined}
               timeFormat={settings?.time_format || 'system'}
               cameraViewMode={settings?.camera_view_mode || 'window'}
+              mediaMode={previewMode}
               onOpenEmbeddedCamera={(id, name) => setEmbeddedCameraPrinters(prev => new Map(prev).set(id, { id, name }))}
               checkPrinterFirmware={settings?.check_printer_firmware !== false}
             />
