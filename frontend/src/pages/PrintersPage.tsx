@@ -2402,7 +2402,7 @@ function PrinterCard({
                       {status.current_print && status.state === 'RUNNING' ? (
                         <>
                           <p className="text-sm text-bambu-gray mb-1">{status.stg_cur_name || 'Printing'}</p>
-                          <p className="text-white text-sm mb-2 truncate">
+                          <p className="text-white text-sm truncate">
                             {status.subtask_name || status.current_print}
                           </p>
                           <div className="flex items-center justify-between text-sm">
@@ -2414,7 +2414,7 @@ function PrinterCard({
                             </div>
                             <span className="text-white">{Math.round(status.progress || 0)}%</span>
                           </div>
-                          <div className="flex items-center gap-3 mt-2 text-xs text-bambu-gray">
+                          <div className="flex items-center gap-3 text-xs text-bambu-gray">
                             {status.remaining_time != null && status.remaining_time > 0 && (
                               <>
                                 <span className="flex items-center gap-1">
