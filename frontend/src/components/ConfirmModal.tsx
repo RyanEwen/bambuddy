@@ -11,6 +11,11 @@ interface ConfirmModalProps {
   cancelText?: string;
   cancelVariant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   cardClassName?: string;
+  // Tailwind z-index utility applied to the fixed overlay. Defaults to
+  // ``z-50``. Use a higher value (e.g. ``z-[110]``) when this confirm
+  // dialog is rendered from inside another modal that uses ``z-[100]`` —
+  // without it the confirm dialog sits behind its parent (#1336 follow-up).
+  overlayZIndex?: string;
   variant?: 'danger' | 'warning' | 'default';
   isLoading?: boolean;
   loadingText?: string;
@@ -29,6 +34,7 @@ export function ConfirmModal({
   cancelText,
   cancelVariant,
   cardClassName,
+  overlayZIndex,
   variant = 'default',
   isLoading = false,
   loadingText,
@@ -68,7 +74,7 @@ export function ConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className={`fixed inset-0 bg-black/50 flex items-center justify-center p-4 ${overlayZIndex ?? 'z-50'}`}
       onClick={isLoading ? undefined : onCancel}
     >
       <Card
