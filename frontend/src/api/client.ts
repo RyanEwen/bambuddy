@@ -3506,12 +3506,18 @@ export const api = {
     request<void>(`/archives/${id}${purgeStats ? '?purge_stats=true' : ''}`, { method: 'DELETE' }),
 
   // ========== Archive auto-purge (#1008 follow-up) ==========
-  previewArchivePurge: (olderThanDays: number) =>
-    request<ArchivePurgePreview>(`/archives/purge/preview?older_than_days=${olderThanDays}`),
-  executeArchivePurge: (olderThanDays: number) =>
-    request<{ deleted: number }>('/archives/purge', {
+  previewArchivePurge: (olderThanDays: number, purgeStats: boolean = false) =>
+    request<ArchivePurgePreview>(
+      `/archives/purge/preview?older_than_days=${olderThanDays}&purge_stats=${purgeStats}`,
+    ),
+  // #1390: purgeStats=false (default) soft-deletes each old archive — Quick Stats
+  // preserved, files removed from disk, row hidden via deleted_at. true matches
+  // the single-archive delete's `?purge_stats=true` semantics (hard-deletes the
+  // linked PrintLogEntry rows so the contribution drops from /stats too).
+  executeArchivePurge: (olderThanDays: number, purgeStats: boolean = false) =>
+    request<{ deleted: number; purge_stats: boolean }>('/archives/purge', {
       method: 'POST',
-      body: JSON.stringify({ older_than_days: olderThanDays }),
+      body: JSON.stringify({ older_than_days: olderThanDays, purge_stats: purgeStats }),
     }),
   getArchivePurgeSettings: () =>
     request<ArchivePurgeSettings>('/archives/purge/settings'),
@@ -5950,6 +5956,10 @@ export interface ArchivePurgePreview {
 export interface ArchivePurgeSettings {
   enabled: boolean;
   days: number;
+  // #1390: when true, bulk-deletes the linked PrintLogEntry rows so the
+  // contribution drops from Quick Stats too. Default false — soft-delete,
+  // Quick Stats preserved.
+  purge_stats: boolean;
 }
 
 export interface LibraryFileUploadResponse {
