@@ -6,7 +6,7 @@ import {
   Plus, Loader2, Trash2, Archive, RotateCcw, Edit2, Package,
   Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   TrendingDown, Layers, Printer, AlertTriangle, X, Clock, LayoutGrid, TableProperties, Columns,
-  ArrowUp, ArrowDown, ArrowUpDown, Group, ChevronDown, Check, RefreshCw, TrendingUp, Lock, Copy,
+  ArrowUp, ArrowDown, ArrowUpDown, Group, ChevronDown, Check, RefreshCw, TrendingUp, Lock, Copy, Eraser,
 } from 'lucide-react';
 import { ForecastPanel } from '../components/ForecastPanel';
 import { api, spoolbuddyApi, ApiError } from '../api/client';
@@ -465,7 +465,11 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
   const [searchParams, setSearchParams] = useSearchParams();
   const [formModal, setFormModal] = useState<{ spool?: InventorySpool | null; mode: SpoolFormMode } | null>(null);
   const deepLinkHandled = useRef(false);
-  const [confirmAction, setConfirmAction] = useState<{ type: 'delete' | 'archive'; spoolId: number } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    | { type: 'delete' | 'archive' | 'reset-usage'; spoolId: number }
+    | { type: 'reset-all-usage' }
+    | null
+  >(null);
   // Label printing (#809). null = closed; otherwise the IDs to print labels for.
   const [labelPickerSpoolIds, setLabelPickerSpoolIds] = useState<number[] | null>(null);
 
@@ -681,6 +685,35 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
       }
     },
   });
+
+  const resetUsageMutation = useMutation({
+    mutationFn: (id: number) =>
+      spoolmanMode ? api.resetSpoolmanInventorySpoolUsage(id) : api.resetSpoolUsage(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: spoolsQueryKey });
+      showToast(t('inventory.usageReset'), 'success');
+    },
+    onError: () => {
+      showToast(t('inventory.resetUsageFailed'), 'error');
+    },
+  });
+
+  const bulkResetUsageMutation = useMutation({
+    mutationFn: (ids: number[]) =>
+      spoolmanMode ? api.bulkResetSpoolmanInventorySpoolUsage(ids) : api.bulkResetSpoolUsage(ids),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: spoolsQueryKey });
+      showToast(t('inventory.allUsageReset', { count: data.reset }), 'success');
+    },
+    onError: () => {
+      showToast(t('inventory.resetUsageFailed'), 'error');
+    },
+  });
+
+  const activeSpoolIds = useMemo(
+    () => (spools ?? []).filter((s) => !s.archived_at).map((s) => s.id),
+    [spools],
+  );
 
   const handleSyncWeight = async (spool: InventorySpool) => {
     if (spool.last_scale_weight == null) return;
@@ -1086,9 +1119,21 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
 
           {/* Total Consumed */}
           <div className="bg-bambu-dark-secondary rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingDown className="w-4 h-4 text-blue-400" />
-              <span className="text-xs text-bambu-gray font-medium uppercase tracking-wide">{t('inventory.totalConsumed')}</span>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <TrendingDown className="w-4 h-4 text-blue-400" />
+                <span className="text-xs text-bambu-gray font-medium uppercase tracking-wide">{t('inventory.totalConsumed')}</span>
+              </div>
+              {stats.totalConsumed > 0 && activeSpoolIds.length > 0 && (
+                <button
+                  onClick={() => setConfirmAction({ type: 'reset-all-usage' })}
+                  className="p-1 text-bambu-gray hover:text-red-400 rounded transition-colors"
+                  title={t('inventory.resetAllUsageTooltip')}
+                  aria-label={t('inventory.resetAllUsage')}
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <div className="text-xl font-bold text-white">{formatWeight(stats.totalConsumed, true)}</div>
             <div className="text-xs text-bambu-gray mt-1">{t('inventory.sinceTracking')}</div>
@@ -1672,6 +1717,7 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
                           onArchive={(id) => setConfirmAction({ type: 'archive', spoolId: id })}
                           onDelete={(id) => setConfirmAction({ type: 'delete', spoolId: id })}
                           onPrintLabel={(id) => setLabelPickerSpoolIds([id])}
+                          onResetUsage={(id) => setConfirmAction({ type: 'reset-usage', spoolId: id })}
                           visibleColumns={visibleColumns}
                           assignmentMap={assignmentMap}
                           catalogMap={catalogMap}
@@ -1697,6 +1743,7 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
                         onArchive={() => setConfirmAction({ type: 'archive', spoolId: spool.id })}
                         onDelete={() => setConfirmAction({ type: 'delete', spoolId: spool.id })}
                         onPrintLabel={() => setLabelPickerSpoolIds([spool.id])}
+                        onResetUsage={() => setConfirmAction({ type: 'reset-usage', spoolId: spool.id })}
                         visibleColumns={visibleColumns}
                         assignmentMap={assignmentMap}
                         catalogMap={catalogMap}
@@ -1797,18 +1844,36 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
         />
       )}
 
-      {/* Confirm Modal (delete / archive) */}
+      {/* Confirm Modal (delete / archive / reset-usage / reset-all-usage) */}
       {confirmAction && (
         <ConfirmModal
-          title={confirmAction.type === 'delete' ? t('common.delete') : t('inventory.archive')}
-          message={confirmAction.type === 'delete' ? t('inventory.deleteConfirm') : t('inventory.archiveConfirm')}
-          confirmText={confirmAction.type === 'delete' ? t('common.delete') : t('inventory.archive')}
-          variant={confirmAction.type === 'delete' ? 'danger' : 'warning'}
+          title={
+            confirmAction.type === 'delete' ? t('common.delete') :
+            confirmAction.type === 'archive' ? t('inventory.archive') :
+            confirmAction.type === 'reset-usage' ? t('inventory.resetUsage') :
+            t('inventory.resetAllUsage')
+          }
+          message={
+            confirmAction.type === 'delete' ? t('inventory.deleteConfirm') :
+            confirmAction.type === 'archive' ? t('inventory.archiveConfirm') :
+            confirmAction.type === 'reset-usage' ? t('inventory.resetUsageConfirm') :
+            t('inventory.resetAllUsageConfirm', { count: activeSpoolIds.length })
+          }
+          confirmText={
+            confirmAction.type === 'delete' ? t('common.delete') :
+            confirmAction.type === 'archive' ? t('inventory.archive') :
+            t('inventory.resetUsage')
+          }
+          variant={confirmAction.type === 'archive' ? 'warning' : 'danger'}
           onConfirm={() => {
             if (confirmAction.type === 'delete') {
               deleteMutation.mutate(confirmAction.spoolId);
-            } else {
+            } else if (confirmAction.type === 'archive') {
               archiveMutation.mutate(confirmAction.spoolId);
+            } else if (confirmAction.type === 'reset-usage') {
+              resetUsageMutation.mutate(confirmAction.spoolId);
+            } else {
+              bulkResetUsageMutation.mutate(activeSpoolIds);
             }
             setConfirmAction(null);
           }}
@@ -2024,7 +2089,7 @@ function SpoolCard({
 
 /* Single spool row for table view */
 function SpoolTableRow({
-  spool, remaining, pct, onEdit, onCopy, onRestore, onArchive, onDelete, onPrintLabel,
+  spool, remaining, pct, onEdit, onCopy, onRestore, onArchive, onDelete, onPrintLabel, onResetUsage,
   visibleColumns, assignmentMap, catalogMap, currencySymbol, dateFormat, t, onSyncWeight,
 }: {
   spool: InventorySpool;
@@ -2036,6 +2101,7 @@ function SpoolTableRow({
   onArchive: () => void;
   onDelete: () => void;
   onPrintLabel?: () => void;
+  onResetUsage?: () => void;
   visibleColumns: string[];
   assignmentMap: Record<number, LocationDisplay>;
   catalogMap: Record<number, SpoolCatalogEntry>;
@@ -2071,6 +2137,11 @@ function SpoolTableRow({
               <Printer className="w-4 h-4" />
             </button>
           )}
+          {onResetUsage && !spool.archived_at && spool.weight_used > 0 && (
+            <button onClick={onResetUsage} className="p-1.5 text-bambu-gray hover:text-orange-400 rounded transition-colors" title={t('inventory.resetUsageTooltip')}>
+              <Eraser className="w-4 h-4" />
+            </button>
+          )}
           {spool.archived_at ? (
             <button onClick={onRestore} className="p-1.5 text-bambu-gray hover:text-bambu-green rounded transition-colors" title={t('inventory.restore')}>
               <RotateCcw className="w-4 h-4" />
@@ -2092,7 +2163,7 @@ function SpoolTableRow({
 /* Grouped spool rows for table view */
 function SpoolTableGroup({
   spools, representative, remaining, pct, isExpanded, onToggle,
-  onEdit, onCopy, onArchive, onDelete, onPrintLabel,
+  onEdit, onCopy, onArchive, onDelete, onPrintLabel, onResetUsage,
   visibleColumns, assignmentMap, catalogMap, currencySymbol, dateFormat, t, onSyncWeight,
 }: {
   spools: InventorySpool[];
@@ -2106,6 +2177,7 @@ function SpoolTableGroup({
   onArchive: (id: number) => void;
   onDelete: (id: number) => void;
   onPrintLabel?: (spoolId: number) => void;
+  onResetUsage?: (id: number) => void;
   visibleColumns: string[];
   assignmentMap: Record<number, LocationDisplay>;
   catalogMap: Record<number, SpoolCatalogEntry>;
@@ -2159,6 +2231,7 @@ function SpoolTableGroup({
             onArchive={() => onArchive(spool.id)}
             onDelete={() => onDelete(spool.id)}
             onPrintLabel={onPrintLabel ? () => onPrintLabel(spool.id) : undefined}
+            onResetUsage={onResetUsage ? () => onResetUsage(spool.id) : undefined}
             visibleColumns={visibleColumns}
             assignmentMap={assignmentMap}
             catalogMap={catalogMap}

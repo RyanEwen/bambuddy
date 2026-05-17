@@ -4651,6 +4651,13 @@ export const api = {
     request<InventorySpool>(`/inventory/spools/${id}/archive`, { method: 'POST' }),
   restoreSpool: (id: number) =>
     request<InventorySpool>(`/inventory/spools/${id}/restore`, { method: 'POST' }),
+  resetSpoolUsage: (id: number) =>
+    request<InventorySpool>(`/inventory/spools/${id}/reset-usage`, { method: 'POST' }),
+  bulkResetSpoolUsage: (spoolIds: number[]) =>
+    request<{ reset: number }>(`/inventory/spools/reset-usage-bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ spool_ids: spoolIds }),
+    }),
   getSpoolKProfiles: (spoolId: number) =>
     request<SpoolKProfile[]>(`/inventory/spools/${spoolId}/k-profiles`),
   saveSpoolKProfiles: (spoolId: number, profiles: SpoolKProfileInput[]) =>
@@ -4815,6 +4822,13 @@ export const api = {
     request<InventorySpool>(`/spoolman/inventory/spools/${id}/archive`, { method: 'POST' }),
   restoreSpoolmanInventorySpool: (id: number) =>
     request<InventorySpool>(`/spoolman/inventory/spools/${id}/restore`, { method: 'POST' }),
+  resetSpoolmanInventorySpoolUsage: (id: number) =>
+    request<InventorySpool>(`/spoolman/inventory/spools/${id}/reset-usage`, { method: 'POST' }),
+  bulkResetSpoolmanInventorySpoolUsage: (spoolIds: number[]) =>
+    request<{ reset: number }>(`/spoolman/inventory/spools/reset-usage-bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ spool_ids: spoolIds }),
+    }),
   linkTagToSpoolmanSpool: (spoolId: number, data: { tag_uid?: string; tray_uuid?: string }) =>
     request<InventorySpool>(`/spoolman/inventory/spools/${spoolId}/tag`, {
       method: 'PATCH',

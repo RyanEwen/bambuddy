@@ -719,6 +719,54 @@ async def restore_spool(
         raise HTTPException(status_code=502, detail="Spoolman returned malformed spool data") from exc
 
 
+@router.post("/spools/{spool_id}/reset-usage")
+async def reset_spool_usage(
+    spool_id: int = Path(..., gt=0),
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_UPDATE),
+) -> dict:
+    """Zero the spool's used_weight in Spoolman without touching anything else."""
+    client = await _get_client(db)
+    async with _translate_spoolman_errors():
+        spool = await client.reset_spool_usage(spool_id)
+    try:
+        return _map_spoolman_spool(spool)
+    except ValueError as exc:
+        logger.warning("Malformed Spoolman spool (id=%r): %s", spool_id, exc)
+        raise HTTPException(status_code=502, detail="Spoolman returned malformed spool data") from exc
+
+
+@router.post("/spools/reset-usage-bulk")
+async def bulk_reset_spool_usage(
+    payload: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_UPDATE),
+) -> dict:
+    """Bulk-reset used_weight to 0 across the given Spoolman spool IDs.
+
+    Caller passes an explicit list of IDs — no "reset all" shortcut, since
+    a typo on a wildcard would wipe the entire inventory's tracking.
+    Returns the count of spools successfully reset; individual failures are
+    logged but do not abort the batch.
+    """
+    spool_ids = payload.get("spool_ids")
+    if not isinstance(spool_ids, list) or not spool_ids:
+        raise HTTPException(status_code=400, detail="spool_ids must be a non-empty list")
+    if not all(isinstance(sid, int) for sid in spool_ids):
+        raise HTTPException(status_code=400, detail="spool_ids must contain integers")
+
+    client = await _get_client(db)
+    reset_count = 0
+    for spool_id in spool_ids:
+        try:
+            async with _translate_spoolman_errors():
+                await client.reset_spool_usage(spool_id)
+            reset_count += 1
+        except HTTPException as exc:
+            logger.warning("Spoolman reset-usage failed for spool %s: %s", spool_id, exc.detail)
+    return {"reset": reset_count}
+
+
 @router.patch("/spools/{spool_id}/weight")
 async def sync_spool_weight(
     *,

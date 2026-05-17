@@ -63,6 +63,7 @@ def mock_spoolman_client():
     mock_client.set_spool_archived = AsyncMock(
         side_effect=lambda spool_id, archived: {**SAMPLE_SPOOLMAN_SPOOL, "archived": archived}
     )
+    mock_client.reset_spool_usage = AsyncMock(return_value={**SAMPLE_SPOOLMAN_SPOOL, "used_weight": 0})
     mock_client.update_spool_full = AsyncMock(return_value=SAMPLE_SPOOLMAN_SPOOL)
     mock_client.merge_spool_extra = AsyncMock(return_value=SAMPLE_SPOOLMAN_SPOOL)
     mock_client.find_or_create_filament = AsyncMock(return_value=7)
@@ -486,6 +487,56 @@ class TestSpoolmanInventoryCRUD:
 
         assert response.status_code == 200
         mock_spoolman_client.set_spool_archived.assert_called_once_with(42, archived=False)
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_reset_spool_usage(
+        self,
+        async_client: AsyncClient,
+        spoolman_settings,
+        mock_spoolman_client,
+    ):
+        """POST /spoolman/inventory/spools/{id}/reset-usage zeroes used_weight in Spoolman."""
+        response = await async_client.post("/api/v1/spoolman/inventory/spools/42/reset-usage")
+
+        assert response.status_code == 200
+        assert response.json()["weight_used"] == 0
+        mock_spoolman_client.reset_spool_usage.assert_called_once_with(42)
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_bulk_reset_spool_usage(
+        self,
+        async_client: AsyncClient,
+        spoolman_settings,
+        mock_spoolman_client,
+    ):
+        """Bulk endpoint resets each listed spool and returns the count."""
+        response = await async_client.post(
+            "/api/v1/spoolman/inventory/spools/reset-usage-bulk",
+            json={"spool_ids": [1, 2, 3]},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"reset": 3}
+        assert mock_spoolman_client.reset_spool_usage.call_count == 3
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_bulk_reset_rejects_empty_list(
+        self,
+        async_client: AsyncClient,
+        spoolman_settings,
+        mock_spoolman_client,
+    ):
+        """Empty list must be rejected — guards against accidental wildcard wipes."""
+        response = await async_client.post(
+            "/api/v1/spoolman/inventory/spools/reset-usage-bulk",
+            json={"spool_ids": []},
+        )
+
+        assert response.status_code == 400
+        mock_spoolman_client.reset_spool_usage.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.integration

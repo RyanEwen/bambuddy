@@ -1065,6 +1065,58 @@ async def restore_spool(
     return result.scalar_one()
 
 
+@router.post("/spools/{spool_id}/reset-usage", response_model=SpoolResponse)
+async def reset_spool_usage(
+    spool_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_UPDATE),
+):
+    """Zero the spool's weight_used counter without locking the spool.
+
+    Unlike PATCH /spools/{id} with weight_used=0, this endpoint does NOT
+    auto-set weight_locked — the spool keeps receiving AMS auto-sync
+    updates from the next print onward. Used to clear the accumulated
+    "Total Consumed" stat so subsequent prints track from a clean zero.
+    """
+    result = await db.execute(select(Spool).where(Spool.id == spool_id))
+    spool = result.scalar_one_or_none()
+    if not spool:
+        raise HTTPException(404, "Spool not found")
+
+    spool.weight_used = 0
+    await db.commit()
+    result = await db.execute(select(Spool).options(selectinload(Spool.k_profiles)).where(Spool.id == spool_id))
+    await ws_manager.broadcast({"type": "inventory_changed"})
+    return result.scalar_one()
+
+
+@router.post("/spools/reset-usage-bulk")
+async def bulk_reset_spool_usage(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_UPDATE),
+):
+    """Bulk-reset weight_used to 0 across the given spool IDs.
+
+    Caller passes an explicit list of IDs — no "reset all" shortcut, since
+    a typo on a wildcard would wipe the entire inventory's tracking.
+    Same semantics as the per-spool endpoint: weight_locked is left alone.
+    """
+    spool_ids = payload.get("spool_ids")
+    if not isinstance(spool_ids, list) or not spool_ids:
+        raise HTTPException(400, "spool_ids must be a non-empty list")
+    if not all(isinstance(sid, int) for sid in spool_ids):
+        raise HTTPException(400, "spool_ids must contain integers")
+
+    result = await db.execute(select(Spool).where(Spool.id.in_(spool_ids)))
+    spools = list(result.scalars().all())
+    for spool in spools:
+        spool.weight_used = 0
+    await db.commit()
+    await ws_manager.broadcast({"type": "inventory_changed"})
+    return {"reset": len(spools)}
+
+
 # ── K-Profiles ───────────────────────────────────────────────────────────────
 
 
